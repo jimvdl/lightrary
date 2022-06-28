@@ -3,4 +3,14 @@ name = "lightrary"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "lightrary"
+path = "src/lib.rs"
+
 [dependencies]
+reqwest = { version = "0.11.11", features = ["json"] }
+tokio = { version = "1.19.2", features = ["full"] }
+serde = { version = "1.0.137", features = ["derive"] }
+futures = "0.3.21"
+async-trait = "0.1.56"
+thiserror = "1.0.31"
