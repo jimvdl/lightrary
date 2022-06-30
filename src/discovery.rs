@@ -1,9 +1,10 @@
+use crate::error::Error;
 use crate::resources::UnauthBridges;
 use async_trait::async_trait;
 
 #[async_trait]
 pub trait Discoverer {
-    async fn discover(&self) -> Result<UnauthBridges, Box<dyn std::error::Error>>;
+    async fn discover(&self) -> Result<UnauthBridges, Error>;
 }
 
 // TODO: mDNS
@@ -14,7 +15,7 @@ pub struct DiscoveryEndpoint;
 
 #[async_trait]
 impl Discoverer for DiscoveryEndpoint {
-    async fn discover(&self) -> Result<UnauthBridges, Box<dyn std::error::Error>> {
+    async fn discover(&self) -> Result<UnauthBridges, Error> {
         reqwest::get("https://discovery.meethue.com")
             .await?
             .json::<UnauthBridges>()
@@ -35,7 +36,7 @@ impl<D> DiscoveryBroker<D>
 where
     D: Discoverer,
 {
-    pub async fn discover(&self) -> Result<UnauthBridges, Box<dyn std::error::Error>> {
+    pub async fn discover(&self) -> Result<UnauthBridges, Error> {
         self.discoverer.discover().await
     }
 }
