@@ -14,3 +14,5 @@ serde = { version = "1.0.137", features = ["derive"] }
 futures = "0.3.21"
 async-trait = "0.1.56"
 thiserror = "1.0.31"
+mdns = "2.0.2"
+futures-util = "0.3.21"

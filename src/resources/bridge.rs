@@ -1,9 +1,10 @@
 // use crate::auth::Authorize;
-use crate::error::{AuthFailed, AuthResult, Error};
+use crate::error::{AuthFailed, AuthResult, Error, GenKeyResult};
 use crate::resources::light::Lights;
 use crate::session::Session;
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
+use std::ops::{Deref, DerefMut};
 
 // TODO: remove, dynamically get this when authenticating bridge
 // const USER: &'static str = "JGQOy1ADXKSa3uuJNZDv5xcGrD9t-AHgoEXki-6a";
@@ -53,6 +54,7 @@ impl UnauthBridges {
                 id: bridge.id,
                 ip: bridge.ip,
                 port: bridge.port,
+                app_key: None,
                 session,
                 config,
             })
@@ -100,6 +102,7 @@ impl UnauthBridge {
             id: self.id,
             ip: self.ip,
             port: self.port,
+            app_key: None,
             session,
             config,
         })
@@ -123,18 +126,83 @@ pub struct BridgeConfig {
 #[derive(Debug)]
 pub struct Bridges(pub(crate) Vec<Bridge>);
 
+impl Bridges {
+    // concept, might change this
+    // make sure that the user knows if the list is empty panic and if you have more than one panic
+    pub fn into_singular(mut self) -> Bridge {
+        self.0.remove(0)
+    }
+}
+
+impl Deref for Bridges {
+    type Target = Vec<Bridge>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Bridges {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 #[derive(Debug)]
 pub struct Bridge {
     pub(crate) id: String,
     pub(crate) ip: Ipv4Addr,
     pub(crate) port: u16,
+    pub(crate) app_key: Option<String>,
     pub(crate) session: Session,
     pub(crate) config: BridgeConfig,
 }
 
+impl Bridge {
+    pub fn with_key(mut self, app_key: String) -> Self {
+        self.app_key = Some(app_key);
+        self
+    }
+
+    pub async fn gen_key(
+        self,
+        app_name: &str,
+        instance_name: &str,
+    ) -> Result<(Self, String), Error> {
+        let app_key = match &self
+            .session
+            .post(format!("https://{}/api", &self.id))
+            .json(&crate::resources::device::DeviceType {
+                app_name,
+                instance_name,
+            })
+            .send()
+            .await?
+            .json::<Vec<GenKeyResult>>()
+            .await?[0]
+        {
+            GenKeyResult::Success(s) => {
+                println!("hallo");
+                String::new()
+            }
+            GenKeyResult::Error(e) => {
+                return Err(e.clone().into());
+            }
+        };
+
+        Ok((
+            Self {
+                app_key: Some(app_key.clone()),
+                ..self
+            },
+            app_key,
+        ))
+    }
+}
+
 // // TODO: rate limiting on all the requests
 // impl Bridge {
-//     pub async fn lights<F>(&mut self, f: F) -> Result<(), Box<dyn std::error::Error>>
+//     pub async fn lights<F>(&mut self, f: F) -> Result<(), Error>
 //     where
 //         F: FnOnce(&mut Lights),
 //     {
@@ -142,13 +210,9 @@ pub struct Bridge {
 //         // they should only need to be reloaded once a new light is added or removed
 //         // when that happens, just invalidate this cache and recache/reload all lights
 //         // to get an updated list
-//         let client = reqwest::Client::builder()
-//             .https_only(true)
-//             .resolve(&self.id, format!("{}:443", self.ip).parse()?)
-//             .build()?;
-//         let mut lights = client
-//             .get(format!("https://{}/api/{}/lights", self.id, USER,))
-//             .header("hue-application-key", USER)
+//         let mut lights = self.session
+//             .get(format!("https://{}/api/{}/lights", self.id, self.app_key))
+//             .header("hue-application-key", &self.app_key)
 //             .send()
 //             .await?
 //             .json::<Lights>()
@@ -156,17 +220,12 @@ pub struct Bridge {
 
 //         f(&mut lights);
 
-//         // let mut buf = Vec::new();
-//         // std::fs::File::open("C:/Users/Jim/Desktop/hue_bridge.pem")?.read_to_end(&mut buf)?;
-//         // let client = reqwest::Client::builder()
-//         //     .add_root_certificate(reqwest::tls::Certificate::from_pem(&buf)?)
-//         //     .build()?;
 //         for (id, light) in lights.0.iter_mut().filter(|(_, l)| l.change.is_some()) {
 //             println!("sending {} with state {:?}", id, light.change);
-//             client
+//             self.session
 //                 .put(format!(
 //                     "https://{}/api/{}/lights/{}/state",
-//                     self.id, USER, id
+//                     self.id, &self.app_key, id
 //                 ))
 //                 .json(&light.change)
 //                 .send()
