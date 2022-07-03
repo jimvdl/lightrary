@@ -7,6 +7,8 @@ pub enum Error {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
+    Mdns(#[from] mdns::Error),
+    #[error(transparent)]
     AddrParse(#[from] std::net::AddrParseError),
     #[error(transparent)]
     GenKey(#[from] GenKeyError),

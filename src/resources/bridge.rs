@@ -9,7 +9,7 @@ use std::ops::{Deref, DerefMut};
 // TODO: remove, dynamically get this when authenticating bridge
 // const USER: &'static str = "JGQOy1ADXKSa3uuJNZDv5xcGrD9t-AHgoEXki-6a";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UnauthBridges(pub(crate) Vec<UnauthBridge>);
 
 impl UnauthBridges {

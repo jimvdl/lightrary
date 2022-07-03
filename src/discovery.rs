@@ -1,7 +1,10 @@
 use crate::error::Error;
 use crate::resources::{UnauthBridge, UnauthBridges};
 use async_trait::async_trait;
+use futures_util::{pin_mut, stream::StreamExt};
+use mdns::{Record, RecordKind};
 use std::net::Ipv4Addr;
+use std::{net::IpAddr, time::Duration};
 
 #[async_trait]
 pub trait Discoverer {
@@ -10,7 +13,50 @@ pub trait Discoverer {
     async fn discover(&self) -> Result<Self::Device, Error>;
 }
 
-// TODO: mDNS
+#[derive(Debug)]
+pub struct Mdns(UnauthBridges);
+
+#[async_trait]
+impl Discoverer for Mdns {
+    type Device = UnauthBridges;
+
+    // might possible miss available bridges on the network due to early return during polling
+    // can't really test because I only have one bridge.
+    async fn discover(&self) -> Result<Self::Device, Error> {
+        let stream = mdns::discover::all("_hue._tcp.local", Duration::from_millis(150))?.listen();
+        let mut bridges = UnauthBridges::default();
+        pin_mut!(stream);
+
+        match stream.next().await {
+            Some(Ok(response)) => {
+                let addr = response.records().filter_map(self::to_ip_addr).next();
+
+                if let Some(addr) = addr {
+                    match addr {
+                        IpAddr::V4(ip) => bridges.0.push(UnauthBridge {
+                            id: None,
+                            ip,
+                            port: 443,
+                        }),
+                        _ => unreachable!("ipv6 not yet supported."),
+                    }
+                }
+            }
+            Some(Err(e)) => return Err(e.into()),
+            None => return Ok(bridges),
+        }
+
+        Ok(bridges)
+    }
+}
+
+fn to_ip_addr(record: &Record) -> Option<IpAddr> {
+    match record.kind {
+        RecordKind::A(addr) => Some(addr.into()),
+        RecordKind::AAAA(addr) => Some(addr.into()),
+        _ => None,
+    }
+}
 
 #[derive(Debug)]
 pub struct DiscoveryEndpoint;
@@ -59,6 +105,14 @@ where
 {
     pub async fn discover(&self) -> Result<D::Device, Error> {
         self.discoverer.discover().await
+    }
+}
+
+impl DiscoveryBroker<Mdns> {
+    pub fn mdns() -> Self {
+        let discoverer = Mdns(UnauthBridges::default());
+
+        Self { discoverer }
     }
 }
 
