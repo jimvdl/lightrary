@@ -1,5 +1,5 @@
-use crate::resources::{Bridges, UnauthBridge};
-use serde::{Deserialize};
+use crate::resources::{Bridge, Bridges, UnauthBridge};
+use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -14,12 +14,18 @@ pub enum Error {
 
 #[derive(Debug)]
 pub struct AuthResult {
+    pub success: Bridge,
+    pub failed: AuthFailed,
+}
+
+#[derive(Debug)]
+pub struct AuthResults {
     pub success: Bridges,
     pub failed: Vec<AuthFailed>,
 }
 
-impl From<AuthResult> for (Bridges, Vec<AuthFailed>) {
-    fn from(result: AuthResult) -> Self {
+impl From<AuthResults> for (Bridges, Vec<AuthFailed>) {
+    fn from(result: AuthResults) -> Self {
         (result.success, result.failed)
     }
 }
@@ -39,9 +45,7 @@ pub enum GenKeyResult {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GenKeySuccess {
-
-}
+pub struct GenKeySuccess {}
 
 #[derive(Error, Debug, Clone, Deserialize)]
 #[error("link button not pressed")]

@@ -1,5 +1,5 @@
 // use crate::auth::Authorize;
-use crate::error::{AuthFailed, AuthResult, Error, GenKeyResult};
+use crate::error::{AuthFailed, AuthResults, Error, GenKeyResult};
 use crate::resources::light::Lights;
 use crate::session::Session;
 use serde::{Deserialize, Serialize};
@@ -13,13 +13,13 @@ use std::ops::{Deref, DerefMut};
 pub struct UnauthBridges(pub(crate) Vec<UnauthBridge>);
 
 impl UnauthBridges {
-    pub async fn auth(self) -> AuthResult {
-        let mut results = AuthResult {
+    pub async fn auth(self) -> AuthResults {
+        let mut results = AuthResults {
             success: Bridges(Vec::new()),
             failed: Vec::new(),
         };
         for bridge in self {
-            let session = match Session::new(&bridge) {
+            let session = match Session::new() {
                 Ok(session) => session,
                 Err(e) => {
                     results.failed.push(AuthFailed { bridge, err: e });
@@ -27,7 +27,7 @@ impl UnauthBridges {
                 }
             };
             let res = match session
-                .get(format!("https://{}/api/0/config", bridge.id))
+                .get(format!("https://{}/api/0/config", bridge.ip))
                 .send()
                 .await
             {
@@ -74,7 +74,7 @@ impl IntoIterator for UnauthBridges {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnauthBridge {
-    pub(crate) id: String,
+    pub(crate) id: Option<String>,
     #[serde(rename = "internalipaddress")]
     pub(crate) ip: Ipv4Addr,
     pub(crate) port: u16,
@@ -82,12 +82,12 @@ pub struct UnauthBridge {
 
 impl UnauthBridge {
     pub async fn auth(self) -> Result<Bridge, (UnauthBridge, Error)> {
-        let session = match Session::new(&self) {
+        let session = match Session::new() {
             Ok(session) => session,
             Err(e) => return Err((self, e)),
         };
         let res = match session
-            .get(format!("https://{}/api/0/config", self.id))
+            .get(format!("https://{}/api/0/config", self.ip))
             .send()
             .await
         {
@@ -150,7 +150,7 @@ impl DerefMut for Bridges {
 
 #[derive(Debug)]
 pub struct Bridge {
-    pub(crate) id: String,
+    pub(crate) id: Option<String>,
     pub(crate) ip: Ipv4Addr,
     pub(crate) port: u16,
     pub(crate) app_key: Option<String>,
@@ -171,7 +171,7 @@ impl Bridge {
     ) -> Result<(Self, String), Error> {
         let app_key = match &self
             .session
-            .post(format!("https://{}/api", &self.id))
+            .post(format!("https://{}/api", &self.ip))
             .json(&crate::resources::device::DeviceType {
                 app_name,
                 instance_name,

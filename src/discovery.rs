@@ -1,26 +1,47 @@
 use crate::error::Error;
-use crate::resources::UnauthBridges;
+use crate::resources::{UnauthBridge, UnauthBridges};
 use async_trait::async_trait;
+use std::net::Ipv4Addr;
 
 #[async_trait]
 pub trait Discoverer {
-    async fn discover(&self) -> Result<UnauthBridges, Error>;
+    type Device;
+
+    async fn discover(&self) -> Result<Self::Device, Error>;
 }
 
 // TODO: mDNS
-// TODO: manual (although i don't know what route to use)
 
 #[derive(Debug)]
 pub struct DiscoveryEndpoint;
 
 #[async_trait]
 impl Discoverer for DiscoveryEndpoint {
-    async fn discover(&self) -> Result<UnauthBridges, Error> {
+    type Device = UnauthBridges;
+
+    async fn discover(&self) -> Result<Self::Device, Error> {
         reqwest::get("https://discovery.meethue.com")
             .await?
             .json::<UnauthBridges>()
             .await
             .map_err(|e| e.into())
+    }
+}
+
+// maybe add a Ipv4Addr to manual conversion method
+#[derive(Debug)]
+pub struct Manual(Ipv4Addr);
+
+#[async_trait]
+impl Discoverer for Manual {
+    type Device = UnauthBridge;
+
+    async fn discover(&self) -> Result<Self::Device, Error> {
+        Ok(UnauthBridge {
+            id: None,
+            ip: self.0,
+            port: 443,
+        })
     }
 }
 
@@ -36,7 +57,7 @@ impl<D> DiscoveryBroker<D>
 where
     D: Discoverer,
 {
-    pub async fn discover(&self) -> Result<UnauthBridges, Error> {
+    pub async fn discover(&self) -> Result<D::Device, Error> {
         self.discoverer.discover().await
     }
 }
@@ -44,6 +65,14 @@ where
 impl DiscoveryBroker<DiscoveryEndpoint> {
     pub fn discovery_endpoint() -> Self {
         let discoverer = DiscoveryEndpoint;
+
+        Self { discoverer }
+    }
+}
+
+impl DiscoveryBroker<Manual> {
+    pub fn manual(ip: Ipv4Addr) -> Self {
+        let discoverer = Manual(ip);
 
         Self { discoverer }
     }
