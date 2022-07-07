@@ -1,4 +1,3 @@
-// use crate::auth::Authorize;
 use crate::error::{AuthFailed, AuthResults, Error, GenKeyResult};
 use crate::resources::light::Lights;
 use crate::session::Session;

@@ -6,6 +6,7 @@ use mdns::{Record, RecordKind};
 use std::net::Ipv4Addr;
 use std::{net::IpAddr, time::Duration};
 
+/// Interchangeable discovery protocol for the `DiscoveryBroker`.
 #[async_trait]
 pub trait Discoverer {
     type Device;
@@ -13,6 +14,8 @@ pub trait Discoverer {
     async fn discover(&self) -> Result<Self::Device, Error>;
 }
 
+/// Discovers all bridges present on your local network through Multicast DNS or 
+/// [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) for short.
 #[derive(Debug)]
 pub struct Mdns(UnauthBridges);
 
@@ -58,6 +61,9 @@ fn to_ip_addr(record: &Record) -> Option<IpAddr> {
     }
 }
 
+/// Discovery protocol that uses Philips' discovery endpoint: <https://discovery.meethue.com> 
+/// 
+/// TODO: document request limit and actually implement it
 #[derive(Debug)]
 pub struct DiscoveryEndpoint;
 
@@ -74,6 +80,10 @@ impl Discoverer for DiscoveryEndpoint {
     }
 }
 
+/// Manually discover your bridge on a local network. 
+/// 
+/// You can find your bridge's IP on your router. If not found check the connectivity
+/// of the bridge and see if the second LED is on. (which signifies the network connection state)
 // maybe add a Ipv4Addr to manual conversion method
 #[derive(Debug)]
 pub struct Manual(Ipv4Addr);
@@ -91,6 +101,13 @@ impl Discoverer for Manual {
     }
 }
 
+/// Broker which discovers your bridge(s) on your local network.
+/// 
+/// | Protocol           | Associated function                                                          |
+/// |--------------------|------------------------------------------------------------------------------|
+/// | mDNS               | [`DiscoveryBroker::mdns`](DiscoveryBroker::mdns)                             |
+/// | Discovery Endpoint | [`DiscoveryBroker::discovery_endpoint`](DiscoveryBroker::discovery_endpoint) |
+/// | Manual             | [`DiscoveryBroker::manual`](DiscoveryBroker::manual)                         |
 #[derive(Debug)]
 pub struct DiscoveryBroker<D>
 where
@@ -103,12 +120,17 @@ impl<D> DiscoveryBroker<D>
 where
     D: Discoverer,
 {
+    /// Use the currently selected discovery method; mDNS, discovery-endpoint or manual,
+    /// to discover your bridge(s) on your local network.
+    /// 
+    /// Either yields the found device(s) or network connectivity errors or mDNS errors.
     pub async fn discover(&self) -> Result<D::Device, Error> {
         self.discoverer.discover().await
     }
 }
 
 impl DiscoveryBroker<Mdns> {
+    /// Creates a discovery broker with the mDNS protocol.
     pub fn mdns() -> Self {
         let discoverer = Mdns(UnauthBridges::default());
 
@@ -117,6 +139,9 @@ impl DiscoveryBroker<Mdns> {
 }
 
 impl DiscoveryBroker<DiscoveryEndpoint> {
+    /// Creates a discovery broker with the discovery-endpoint access.
+    /// 
+    /// Note: TODO: throughput rates.
     pub fn discovery_endpoint() -> Self {
         let discoverer = DiscoveryEndpoint;
 
@@ -125,6 +150,8 @@ impl DiscoveryBroker<DiscoveryEndpoint> {
 }
 
 impl DiscoveryBroker<Manual> {
+    /// Creates a discovery broker with the manually entered IP connecting
+    /// straight to your bridge.
     pub fn manual(ip: Ipv4Addr) -> Self {
         let discoverer = Manual(ip);
 
