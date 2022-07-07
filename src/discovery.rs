@@ -146,7 +146,8 @@ fn to_ip_addr(record: &Record) -> Option<IpAddr> {
 
 /// Discovery protocol that uses Philips' discovery endpoint: <https://discovery.meethue.com> 
 /// 
-/// TODO: document request limit and actually implement it
+/// Note: limited to 1 request every 15 minutes.
+// TODO: implement request limiter
 #[derive(Debug)]
 pub struct DiscoveryEndpoint;
 
@@ -167,7 +168,6 @@ impl Discoverer for DiscoveryEndpoint {
 /// 
 /// You can find your bridge's IP on your router. If not found check the connectivity
 /// of the bridge and see if the second LED is on. (which signifies the network connection state)
-// maybe add a Ipv4Addr to manual conversion method
 #[derive(Debug)]
 pub struct Manual(pub Ipv4Addr);
 
@@ -224,7 +224,7 @@ impl DiscoveryBroker<Mdns> {
 impl DiscoveryBroker<DiscoveryEndpoint> {
     /// Creates a discovery broker with the discovery-endpoint access.
     /// 
-    /// Note: TODO: throughput rates.
+    /// Note: limited to 1 request every 15 minutes.
     pub fn discovery_endpoint() -> Self {
         let discoverer = DiscoveryEndpoint;
 
@@ -236,7 +236,7 @@ impl DiscoveryBroker<Manual> {
     /// Creates a discovery broker with the manually entered IP connecting
     /// straight to your bridge.
     /// 
-    /// Last resort TODO
+    /// Note: only use this if no other protocol works.
     pub fn manual(ip: Ipv4Addr) -> Self {
         let discoverer = Manual(ip);
 
