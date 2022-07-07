@@ -1,9 +1,92 @@
+//! Discover one or multiple bridges on your local network with a variety of protocols.
+//! 
+//! # Discovery protocols and their usage:
+//! 
+//! When in doubt which protocol to use always prioritize mDNS followed by the 
+//! discovery-endpoint and finally manual discovery.
+//! 
+//! mDNS is truely local without any outside connectivity required and no request limit, 
+//! whereas the hue endpoint does require a outside connection due to a cloud dependency
+//! and its request limit of 1 request every 15 minutes. Manual should only be considered
+//! if neither mDNS nor the endpoint show your bridge(s), manual also has no request limit. 
+//! 
+//! | Protocol | Characteristics | Priority |
+//! |----------|--------------|----------|
+//! | mDNS     | Truely local: no outside connection (wanted or available) with no request limit.  | mDNS over discovery-endpoint |
+//! | Discovery-endpoint | Cloud dependant with a request limit of 1 every 15 minutes. | Discovery-endpoint over manual |
+//! | Manual | As a last resort when all others fail, no request limit. | Fallback |
+//! 
+//! # Examples
+//! 
+//! Example using the mDNS protocol:
+//! ```no_run
+//! use lightrary::discovery::DiscoveryBroker;
+//! 
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let broker = DiscoveryBroker::mdns();
+//! let bridges = broker.discover().await?;
+//! # Ok(())
+//! # }
+//! ```
+//! 
+//! Example using the discovery endpoint:
+//! ```no_run
+//! use lightrary::discovery::DiscoveryBroker;
+//! 
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let broker = DiscoveryBroker::discovery_endpoint();
+//! let bridges = broker.discover().await?;
+//! # Ok(())
+//! # }
+//! ```
+//! 
+//! Example using manual connection:
+//! ```no_run
+//! use lightrary::discovery::DiscoveryBroker;
+//! 
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let broker = DiscoveryBroker::manual("192.168.50.173".parse()?);
+//! // note: manual only supports one bridge at a time, possible list 
+//! // might be supported in the future.
+//! let bridge = broker.discover().await?;
+//! # Ok(())
+//! # }
+//! ```
+//! 
+//! An [`Ipv4Addr`](std::net::Ipv4Addr) can also be converted to a `DiscoveryBroker` 
+//! using the [`From`](std::convert::From) trait.
+//! 
+//! ```no_run
+//! use lightrary::discovery::DiscoveryBroker;
+//! use std::net::Ipv4Addr;
+//! 
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let manual_broker = DiscoveryBroker::from(Ipv4Addr::new(192, 168, 50, 173));
+//! # Ok(())
+//! # }
+//! ```
+//! 
+//! You can also directly convert a ip str into a `DiscoveryBroker<Manual>` using 
+//! [`FromStr`](std::str::FromStr):
+//! ```no_run
+//! use lightrary::discovery::{DiscoveryBroker, Manual};
+//! 
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let manual_broker: DiscoveryBroker<Manual> = "192.168.50.173".parse()?;
+//! # Ok(())
+//! # }
+//! ```
+
 use crate::error::Error;
 use crate::resources::{UnauthBridge, UnauthBridges};
 use async_trait::async_trait;
 use futures_util::{pin_mut, stream::StreamExt};
 use mdns::{Record, RecordKind};
 use std::net::Ipv4Addr;
+use std::str::FromStr;
 use std::{net::IpAddr, time::Duration};
 
 /// Interchangeable discovery protocol for the `DiscoveryBroker`.
@@ -86,7 +169,7 @@ impl Discoverer for DiscoveryEndpoint {
 /// of the bridge and see if the second LED is on. (which signifies the network connection state)
 // maybe add a Ipv4Addr to manual conversion method
 #[derive(Debug)]
-pub struct Manual(Ipv4Addr);
+pub struct Manual(pub Ipv4Addr);
 
 #[async_trait]
 impl Discoverer for Manual {
@@ -152,9 +235,25 @@ impl DiscoveryBroker<DiscoveryEndpoint> {
 impl DiscoveryBroker<Manual> {
     /// Creates a discovery broker with the manually entered IP connecting
     /// straight to your bridge.
+    /// 
+    /// Last resort TODO
     pub fn manual(ip: Ipv4Addr) -> Self {
         let discoverer = Manual(ip);
 
         Self { discoverer }
+    }
+}
+
+impl From<Ipv4Addr> for DiscoveryBroker<Manual> {
+    fn from(ip: Ipv4Addr) -> Self {
+        Self { discoverer: Manual(ip) }
+    }
+}
+
+impl FromStr for DiscoveryBroker<Manual> {
+    type Err = std::net::AddrParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self { discoverer: Manual(s.parse()?) })
     }
 }

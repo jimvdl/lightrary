@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use lightrary::discovery::DiscoveryBroker;
 
 #[tokio::main]
