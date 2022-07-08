@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// TODO: remove pub(crate) and impl IntoIter & Deref/DerefMut
+// TODO: remove pub(crate) and impl IntoIter
 #[derive(Debug, Deserialize)]
 pub struct Lights(pub(crate) HashMap<u32, Light>);
 

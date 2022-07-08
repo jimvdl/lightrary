@@ -5,16 +5,18 @@
 //! When in doubt which protocol to use always prioritize mDNS followed by the
 //! discovery-endpoint and finally manual discovery.
 //!
-//! mDNS is truely local without any outside connectivity required and no request limit,
+//! mDNS is truely local without any outside connectivity required and has no request limit,
 //! whereas the hue endpoint does require a outside connection due to a cloud dependency
-//! and its request limit of 1 request every 15 minutes. Manual should only be considered
-//! if neither mDNS nor the endpoint show your bridge(s), manual also has no request limit.
+//! and should limit requests to 1 request every 15 minutes. Manual should only be considered
+//! if neither mDNS nor the endpoint show your bridge(s), manual also doesn't need a request limit.
+//!
+//! [tower-limit](https://crates.io/crates/tower-limit) is a great request limiter for the `DiscoveryBroker<DiscoveryEndpoint>`.
 //!
 //! | Protocol | Characteristics | Priority |
 //! |----------|--------------|----------|
-//! | mDNS     | Truely local: no outside connection (wanted or available) with no request limit.  | mDNS over discovery-endpoint |
-//! | Discovery-endpoint | Cloud dependant with a request limit of 1 every 15 minutes. | Discovery-endpoint over manual |
-//! | Manual | As a last resort when all others fail, no request limit. | Fallback |
+//! | mDNS     | Truely local: no outside connection (wanted or available) without a request limit.  | mDNS over discovery-endpoint |
+//! | Discovery-endpoint | Cloud dependant, should limit requests to 1 request every 15 minutes. | Discovery-endpoint over manual |
+//! | Manual | As a last resort when all others fail, no request limit needed. | Fallback |
 //!
 //! # Examples
 //!
@@ -37,6 +39,7 @@
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let broker = DiscoveryBroker::discovery_endpoint();
+//! // note: you should request limit this to once every 15 minutes.
 //! let bridges = broker.discover().await?;
 //! # Ok(())
 //! # }
@@ -52,30 +55,6 @@
 //! // note: manual only supports one bridge at a time, possible list
 //! // might be supported in the future.
 //! let bridge = broker.discover().await?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! An [`Ipv4Addr`](std::net::Ipv4Addr) can also be converted to a `DiscoveryBroker`
-//! using the [`From`](std::convert::From) trait.
-//!
-//! ```no_run
-//! use lightrary::discovery::DiscoveryBroker;
-//! use std::net::Ipv4Addr;
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let manual_broker = DiscoveryBroker::from(Ipv4Addr::new(192, 168, 50, 173));
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! You can also directly convert a ip str into a `DiscoveryBroker<Manual>` using
-//! [`FromStr`](std::str::FromStr):
-//! ```no_run
-//! use lightrary::discovery::{DiscoveryBroker, Manual};
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let manual_broker: DiscoveryBroker<Manual> = "192.168.50.173".parse()?;
 //! # Ok(())
 //! # }
 //! ```
@@ -108,6 +87,7 @@ impl Discoverer for Mdns {
 
     // might possible miss available bridges on the network due to early return during polling
     // can't really test because I only have one bridge.
+    // TODO: find a way to support a longer search duration without early return
     async fn discover(&self) -> Result<Self::Device, Error> {
         let stream = mdns::discover::all("_hue._tcp.local", Duration::from_millis(150))?.listen();
         let mut bridges = UnauthBridges::default();
@@ -146,8 +126,7 @@ fn to_ip_addr(record: &Record) -> Option<IpAddr> {
 
 /// Discovery protocol that uses Philips' discovery endpoint: <https://discovery.meethue.com>
 ///
-/// Note: limited to 1 request every 15 minutes.
-// TODO: implement request limiter
+/// Note: should be limited to 1 request every 15 minutes.
 #[derive(Debug)]
 pub struct DiscoveryEndpoint;
 
@@ -168,8 +147,32 @@ impl Discoverer for DiscoveryEndpoint {
 ///
 /// You can find your bridge's IP on your router. If not found check the connectivity
 /// of the bridge and see if the second LED is on. (which signifies the network connection state)
+///
+/// An [`Ipv4Addr`](std::net::Ipv4Addr) can also be converted to a `DiscoveryBroker<Manual>`
+/// using the [`From`](std::convert::From) trait.
+///
+/// ```no_run
+/// use lightrary::discovery::DiscoveryBroker;
+/// use std::net::Ipv4Addr;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let manual_broker = DiscoveryBroker::from(Ipv4Addr::new(192, 168, 50, 173));
+/// # Ok(())
+/// # }
+/// ```
+///
+/// You can also directly convert a ip str into a `DiscoveryBroker<Manual>` using
+/// [`FromStr`](std::str::FromStr):
+/// ```no_run
+/// use lightrary::discovery::{DiscoveryBroker, Manual};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let manual_broker: DiscoveryBroker<Manual> = "192.168.50.173".parse()?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
-pub struct Manual(pub Ipv4Addr);
+pub struct Manual(Ipv4Addr);
 
 #[async_trait]
 impl Discoverer for Manual {
@@ -224,7 +227,7 @@ impl DiscoveryBroker<Mdns> {
 impl DiscoveryBroker<DiscoveryEndpoint> {
     /// Creates a discovery broker with the discovery-endpoint access.
     ///
-    /// Note: limited to 1 request every 15 minutes.
+    /// Note: should be limited to 1 request every 15 minutes.
     pub fn discovery_endpoint() -> Self {
         let discoverer = DiscoveryEndpoint;
 

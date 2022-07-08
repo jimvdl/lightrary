@@ -3,7 +3,6 @@ use crate::resources::light::Lights;
 use crate::session::Session;
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
-use std::ops::{Deref, DerefMut};
 
 // TODO: remove, dynamically get this when authenticating bridge
 // const USER: &'static str = "JGQOy1ADXKSa3uuJNZDv5xcGrD9t-AHgoEXki-6a";
@@ -132,20 +131,6 @@ impl Bridges {
     // make sure that the user knows if the list is empty panic and if you have more than one panic
     pub fn into_singular(mut self) -> Bridge {
         self.0.remove(0)
-    }
-}
-
-impl Deref for Bridges {
-    type Target = Vec<Bridge>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Bridges {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
