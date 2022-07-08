@@ -54,6 +54,7 @@ impl UnauthBridges {
                 ip: bridge.ip,
                 port: bridge.port,
                 app_key: None,
+                client_key: None,
                 session,
                 config,
             })
@@ -102,6 +103,7 @@ impl UnauthBridge {
             ip: self.ip,
             port: self.port,
             app_key: None,
+            client_key: None,
             session,
             config,
         })
@@ -153,6 +155,7 @@ pub struct Bridge {
     pub(crate) ip: Ipv4Addr,
     pub(crate) port: u16,
     pub(crate) app_key: Option<String>,
+    pub(crate) client_key: Option<String>,
     pub(crate) session: Session,
     pub(crate) config: BridgeConfig,
 }
@@ -168,7 +171,7 @@ impl Bridge {
         app_name: &str,
         instance_name: &str,
     ) -> Result<(Self, String), Error> {
-        let app_key = match &self
+        let gen_key_result = match self
             .session
             .post(format!("https://{}/api", &self.ip))
             .json(&crate::resources::device::DeviceType {
@@ -178,23 +181,21 @@ impl Bridge {
             .send()
             .await?
             .json::<Vec<GenKeyResult>>()
-            .await?[0]
+            .await?
+            // no clue why they made this an array, it always only contains 1 result ?
+            .remove(0)
         {
-            GenKeyResult::Success(s) => {
-                println!("hallo");
-                String::new()
-            }
-            GenKeyResult::Error(e) => {
-                return Err(e.clone().into());
-            }
+            GenKeyResult::Success(s) => s,
+            GenKeyResult::Error(e) => return Err(e.clone().into()),
         };
 
         Ok((
             Self {
-                app_key: Some(app_key.clone()),
+                app_key: Some(gen_key_result.username.clone()),
+                client_key: Some(gen_key_result.clientkey),
                 ..self
             },
-            app_key,
+            gen_key_result.username.clone(),
         ))
     }
 }

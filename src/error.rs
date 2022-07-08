@@ -47,7 +47,10 @@ pub enum GenKeyResult {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GenKeySuccess {}
+pub struct GenKeySuccess {
+    pub(crate) username: String,
+    pub(crate) clientkey: String,
+}
 
 #[derive(Error, Debug, Clone, Deserialize)]
 #[error("link button not pressed")]

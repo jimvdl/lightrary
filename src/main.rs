@@ -1,5 +1,3 @@
-use std::net::Ipv4Addr;
-
 use lightrary::discovery::DiscoveryBroker;
 
 #[tokio::main]
@@ -11,28 +9,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     lights.name("Main J").toggle();
     // }).await?;
 
-    // let broker = DiscoveryBroker::manual("192.168.50.173".parse()?);
-    // let bridge = broker.discover().await?;
-    // let b = match bridge.auth().await {
-    //     Ok(bridge) => bridge,
-    //     Err((unauth_bridge, err)) => {
-    //         // retry
-    //         todo!()
-    //     }
-    // };
-    // println!("{:?}", b);
+    let broker = DiscoveryBroker::manual("192.168.50.173".parse()?);
+    let bridge = broker.discover().await?;
+    let b = match bridge.auth().await {
+        Ok(bridge) => bridge,
+        Err((unauth_bridge, err)) => {
+            // retry
+            todo!()
+        }
+    };
     // let (bridges, _failed) = bridges.auth().await.into();
     // let bridge = bridges.into_singular();
-    // let (bridge, app_key) = bridge.gen_key("test_app", "yeey").await?;
+    let (bridge, app_key) = b.gen_key("test_app", "yeey").await?;
+    println!("{:?}", app_key);
 
 
     // bridge.lights(|lights| {
 
     // }).await?;
-
-    let broker = DiscoveryBroker::mdns();
-    let bridges = broker.discover().await?;
-    println!("main: {:?}", bridges);
 
     Ok(())
 }
